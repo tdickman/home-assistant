@@ -344,6 +344,14 @@ class ToggleEntity(Entity):
         """Turn the entity on."""
         raise NotImplementedError()
 
+    def async_set_state(self, **kwargs):
+        """Turn the entity on.
+
+        This method must be run in the event loop and returns a coroutine.
+        """
+        return self.hass.loop.run_in_executor(
+            None, ft.partial(self.set_state, **kwargs))
+
     def async_turn_on(self, **kwargs):
         """Turn the entity on.
 

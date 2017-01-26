@@ -16,8 +16,8 @@ from homeassistant.core import callback
 from homeassistant.components import group
 from homeassistant.config import load_yaml_config_file
 from homeassistant.const import (
-    STATE_ON, SERVICE_TURN_ON, SERVICE_TURN_OFF, SERVICE_TOGGLE,
-    ATTR_ENTITY_ID)
+    STATE_ON, SERVICE_TURN_ON, SERVICE_TURN_OFF, SERVICE_SET_STATE,
+    SERVICE_TOGGLE, ATTR_ENTITY_ID)
 from homeassistant.helpers.entity import ToggleEntity
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA  # noqa
@@ -109,6 +109,24 @@ LIGHT_TURN_ON_SCHEMA = vol.Schema({
     ATTR_EFFECT: cv.string,
 })
 
+LIGHT_SET_STATE_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.entity_ids,
+    ATTR_PROFILE: cv.string,
+    ATTR_TRANSITION: VALID_TRANSITION,
+    ATTR_BRIGHTNESS: VALID_BRIGHTNESS,
+    ATTR_COLOR_NAME: cv.string,
+    ATTR_RGB_COLOR: vol.All(vol.ExactSequence((cv.byte, cv.byte, cv.byte)),
+                            vol.Coerce(tuple)),
+    ATTR_XY_COLOR: vol.All(vol.ExactSequence((cv.small_float, cv.small_float)),
+                           vol.Coerce(tuple)),
+    ATTR_COLOR_TEMP: vol.All(vol.Coerce(int),
+                             vol.Range(min=color_util.HASS_COLOR_MIN,
+                                       max=color_util.HASS_COLOR_MAX)),
+    ATTR_WHITE_VALUE: vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+    ATTR_FLASH: vol.In([FLASH_SHORT, FLASH_LONG]),
+    ATTR_EFFECT: cv.string,
+})
+
 LIGHT_TURN_OFF_SCHEMA = vol.Schema({
     ATTR_ENTITY_ID: cv.entity_ids,
     ATTR_TRANSITION: VALID_TRANSITION,
@@ -139,6 +157,41 @@ def is_on(hass, entity_id=None):
     """Return if the lights are on based on the statemachine."""
     entity_id = entity_id or ENTITY_ID_ALL_LIGHTS
     return hass.states.is_state(entity_id, STATE_ON)
+
+
+def set_state(hass, entity_id=None, transition=None, brightness=None,
+            rgb_color=None, xy_color=None, color_temp=None, white_value=None,
+            profile=None, flash=None, effect=None, color_name=None):
+    """Turn all or specified light on."""
+    run_callback_threadsafe(
+        hass.loop, async_set_state, hass, entity_id, transition, brightness,
+        rgb_color, xy_color, color_temp, white_value,
+        profile, flash, effect, color_name).result()
+
+
+@callback
+def async_set_state(hass, entity_id=None, transition=None, brightness=None,
+                  rgb_color=None, xy_color=None, color_temp=None,
+                  white_value=None, profile=None, flash=None, effect=None,
+                  color_name=None):
+    """Turn all or specified light on."""
+    data = {
+        key: value for key, value in [
+            (ATTR_ENTITY_ID, entity_id),
+            (ATTR_PROFILE, profile),
+            (ATTR_TRANSITION, transition),
+            (ATTR_BRIGHTNESS, brightness),
+            (ATTR_RGB_COLOR, rgb_color),
+            (ATTR_XY_COLOR, xy_color),
+            (ATTR_COLOR_TEMP, color_temp),
+            (ATTR_WHITE_VALUE, white_value),
+            (ATTR_FLASH, flash),
+            (ATTR_EFFECT, effect),
+            (ATTR_COLOR_NAME, color_name),
+        ] if value is not None
+    }
+
+    hass.async_add_job(hass.services.async_call(DOMAIN, SERVICE_SET_STATE, data))
 
 
 def turn_on(hass, entity_id=None, transition=None, brightness=None,
@@ -249,6 +302,8 @@ def async_setup(hass, config):
                 yield from light.async_turn_on(**params)
             elif service.service == SERVICE_TURN_OFF:
                 yield from light.async_turn_off(**params)
+            elif service.service == SERVICE_SET_STATE:
+                yield from light.async_set_state(**params)
             else:
                 yield from light.async_toggle(**params)
 
@@ -276,6 +331,10 @@ def async_setup(hass, config):
     hass.services.async_register(
         DOMAIN, SERVICE_TURN_ON, async_handle_light_service,
         descriptions.get(SERVICE_TURN_ON), schema=LIGHT_TURN_ON_SCHEMA)
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_STATE, async_handle_light_service,
+        descriptions.get(SERVICE_SET_STATE), schema=LIGHT_SET_STATE_SCHEMA)
 
     hass.services.async_register(
         DOMAIN, SERVICE_TURN_OFF, async_handle_light_service,

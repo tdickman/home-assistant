@@ -10,7 +10,7 @@ from datetime import time
 import logging
 import voluptuous as vol
 
-from homeassistant.components.light import is_on, turn_on
+from homeassistant.components.light import is_on, turn_on, set_state
 from homeassistant.components.sun import next_setting, next_rising
 from homeassistant.components.switch import DOMAIN, SwitchDevice
 from homeassistant.const import CONF_NAME, CONF_PLATFORM
@@ -62,21 +62,19 @@ PLATFORM_SCHEMA = vol.Schema({
 def set_lights_xy(hass, lights, x_val, y_val, brightness):
     """Set color of array of lights."""
     for light in lights:
-        if is_on(hass, light):
-            turn_on(hass, light,
-                    xy_color=[x_val, y_val],
-                    brightness=brightness,
-                    transition=30)
+        set_state(hass, light,
+                xy_color=[x_val, y_val],
+                brightness=brightness,
+                transition=30)
 
 
 def set_lights_temp(hass, lights, mired, brightness):
     """Set color of array of lights."""
     for light in lights:
-        if is_on(hass, light):
-            turn_on(hass, light,
-                    color_temp=int(mired),
-                    brightness=brightness,
-                    transition=30)
+        set_state(hass, light,
+                color_temp=int(mired),
+                brightness=brightness,
+                transition=30)
 
 
 # pylint: disable=unused-argument
